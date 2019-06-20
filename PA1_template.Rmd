@@ -1,0 +1,132 @@
+# Activity Monitoring Data Analysis
+
+## 0. Setup
+
+```{r setup, echo=TRUE}
+rm(list=ls())
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+```
+
+## 1. Read the dataset
+```{r read, echo=TRUE}
+MyData <- read.csv(file="activity.csv", header=TRUE, sep=",")
+```
+
+## 01. Histogram of the total number of steps taken each day
+
+### Remove NA rows
+```{r 02_01, echo=TRUE}
+MyData2 <- MyData[complete.cases(MyData),]
+```
+
+### Calculate the total steps per day
+```{r 02_02, echo=TRUE}
+total_steps <- MyData2 %>%
+     group_by(date) %>%
+     summarise(avg_steps = mean(steps), sum_steps = sum(steps))
+mean_steps <- mean(total_steps$sum_steps)
+median_steps <- median(total_steps$sum_steps)
+```
+
+### Plot histogram chart
+```{r 02_03, echo=TRUE}
+ggplot(total_steps, aes(x = sum_steps)) + geom_histogram() + ggtitle("Sum of Steps per day")
+```
+
+## 3. Mean and median number of steps taken each day
+The mean number of steps taken each day is `r mean_steps`.
+
+The median number of steps taken each day is `r median_steps`.
+
+## 4.Time series plot of the average number of steps taken
+```{r 04_01, echo=TRUE}
+ggplot(total_steps, aes(x = sum_steps)) + geom_histogram() + ggtitle("Sum of Steps per day - Original Data")
+```
+
+## 5.The 5-minute interval that, on average, contains the maximum number of steps
+
+### Calculation
+```{r 05_01, echo=TRUE}
+steps_interval <- MyData2 %>%
+     group_by(interval) %>%
+     summarize(avg_steps = mean(steps))
+max_steps <- max(steps_interval$avg_steps)
+max_row <- which(steps_interval$avg_steps >= max_steps, arr.ind=T)
+max_interval <- steps_interval[max_row, 1]
+
+plot(steps_interval$interval, steps_interval$avg_steps, type="l", col="blue", xlab="5-minute interval", ylab="Average Steps per Day")
+```
+
+The 5-minute interval that, on average, contains the maximum number of steps is `r max_interval`.
+
+## 6.Code to describe and show a strategy for imputing missing data
+
+### Calculate the number of missing values
+```{r 06_01, echo=TRUE}
+missing_values <- sum(is.na(MyData$steps))
+```
+The number of missing values in the dataset is `r missing_values`.
+
+### Complete missing values with the average for the interval
+```{r 06_02, echo=TRUE}
+missing_MyData <- MyData[!complete.cases(MyData),]
+missing_MyData <- merge(missing_MyData[, c("steps", "date", "interval")], steps_interval[, c("interval", "avg_steps")])
+missing_MyData$steps <- NULL
+missing_MyData <- missing_MyData %>% rename (steps = avg_steps)
+Complete_Data <- rbind(missing_MyData, MyData2)
+```
+
+## 7.Histogram of the total number of steps taken each day after missing values are imputed
+
+### Calculate the total steps per day
+```{r 07_01, echo=TRUE}
+total_steps2 <- Complete_Data %>%
+     group_by(date) %>%
+     summarise(avg_steps = mean(steps), sum_steps = sum(steps))
+mean_steps2 <- mean(total_steps2$sum_steps)
+median_steps2 <- median(total_steps2$sum_steps)
+```
+
+### Plot histogram chart
+```{r 07_02, echo=TRUE}
+ggplot(total_steps2, aes(x = avg_steps)) + geom_histogram()+ ggtitle("Modified Data")
+```
+
+### Plot both histogram charts to compare how inputing missing values altered the results
+```{r 07_03, echo=TRUE}
+p1 <- ggplot(total_steps, aes(x = sum_steps)) + geom_histogram() + ggtitle("Original Data") + ylim(0, 15)
+p2 <- ggplot(total_steps2, aes(x = sum_steps)) + geom_histogram()+ ggtitle("Modified Data") + ylim(0, 15)
+grid.arrange(p1, p2, nrow = 1)
+```
+
+## 8.Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+### Classify the days in Weekdays or Weekends
+```{r 08_01, echo=TRUE}
+Complete_Data$date <- as.POSIXct(Complete_Data$date)
+Complete_Data <- Complete_Data %>% mutate(weekday = weekdays(date, abbreviate = TRUE))
+
+i = 1
+while (i <= nrow(Complete_Data)) {
+     if (Complete_Data[i,"weekday"] == "Sat"  | Complete_Data[i,"weekday"] == "Sun") {
+          Complete_Data[i,"weekday"] <- "weekend"
+     } else {
+          Complete_Data[i,"weekday"] <- "weekday"
+     }
+     i = i + 1
+}
+```
+
+### Calculate the average of steps for each group 
+```{r 08_02, echo=TRUE}
+total_steps3 <- Complete_Data %>%
+     group_by(interval, weekday) %>%
+     summarise(avg_steps = mean(steps))
+```
+
+### Plot line chart for average steps
+```{r 08_03, echo=TRUE}
+ggplot(total_steps3, aes(x = interval, y = avg_steps, color = weekday)) + geom_line()
+```
